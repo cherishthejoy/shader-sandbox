@@ -104,7 +104,7 @@ function init() {
     shaderPasses.bayerDither.enabled = false;
 
     const textureLoader = new THREE.TextureLoader();
-    const blueNoiseTexture = textureLoader.load('/textures/128x128.png');
+    const blueNoiseTexture = textureLoader.load('./textures/128x128.png');
     blueNoiseTexture.wrapS  = THREE.RepeatWrapping;
     blueNoiseTexture.wrapT  = THREE.RepeatWrapping;
 
