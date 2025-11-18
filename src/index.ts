@@ -15,6 +15,8 @@ import { CathodeRayTube } from './CathodeRayTube';
 import { UnrealBloomPass} from 'three/examples/jsm/Addons.js';
 import { CRTad } from './CRTad';
 import { AsciiShader } from './AsciiShader';
+import { HueLightness } from './HueLightness';
+import { ColorPalette } from './ColorPalette';
 
 const clock = new THREE.Clock();
 
@@ -34,12 +36,15 @@ const shaderPasses = {
     cRayTube: null as ShaderPass | null,
     crtAd: null as ShaderPass | null,
     ascii: null as ShaderPass | null,
+    hue: null as ShaderPass | null,
+    pal: null as ShaderPass | null,
 };
 
 const settings = {
     activeShader: 'none',
     enableBloom: false,
 }
+
 
 init()
 animate()
@@ -104,9 +109,15 @@ function init() {
     shaderPasses.bayerDither.enabled = false;
 
     const textureLoader = new THREE.TextureLoader();
-    const blueNoiseTexture = textureLoader.load('/textures/128x128.png');
+    const blueNoiseTexture = textureLoader.load('textures/128x128.png');
     blueNoiseTexture.wrapS  = THREE.RepeatWrapping;
     blueNoiseTexture.wrapT  = THREE.RepeatWrapping;
+
+    const paletteTexture = textureLoader.load('textures/fading-16-8x.png');
+    paletteTexture.minFilter = THREE.NearestFilter;
+    paletteTexture.magFilter = THREE.NearestFilter;
+    paletteTexture.wrapS = THREE.ClampToEdgeWrapping;
+    paletteTexture.wrapT = THREE.ClampToEdgeWrapping;
 
     // Blue Noise
     shaderPasses.blueNoise = new ShaderPass(BlueNoiseDither);
@@ -142,6 +153,20 @@ function init() {
     shaderPasses.ascii.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
     shaderPasses.ascii.enabled = false;
 
+    
+
+    shaderPasses.hue = new ShaderPass(HueLightness);
+    shaderPasses.hue.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    shaderPasses.hue.uniforms['colorNum'].value = 16.0;
+    shaderPasses.hue.enabled = false;
+
+    shaderPasses.pal = new ShaderPass(ColorPalette);
+    shaderPasses.pal.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    shaderPasses.pal.uniforms['colorNum'].value = 16.0;
+    shaderPasses.pal.uniforms['palette'].value = paletteTexture;
+    shaderPasses.pal.enabled = false;
+
+
     // Add the pass to the effect composer
     composer.addPass(shaderPasses.bloomPass);
     composer.addPass(shaderPasses.bayerDither);
@@ -150,6 +175,8 @@ function init() {
     composer.addPass(shaderPasses.cRayTube);
     composer.addPass(shaderPasses.crtAd);
     composer.addPass(shaderPasses.ascii);
+    composer.addPass(shaderPasses.hue);
+    composer.addPass(shaderPasses.pal);
     
 
     const outputPass = new OutputPass();
@@ -208,6 +235,14 @@ function setupGUI() {
     crtAdFolder.add(shaderPasses.crtAd!.uniforms.pixelSize, 'value', [4.0, 8.0, 16.0, 32.0]).name("Pixel Size");
     crtAdFolder.hide();
 
+    const hueFolder = gui.addFolder('Lightness');
+    hueFolder.add(shaderPasses.hue!.uniforms.colorNum, 'value', [2.0, 4.0, 8.0, 16.0]).name("Color Number");
+    hueFolder.hide();
+
+    const palFolder = gui.addFolder('Palette');
+    palFolder.add(shaderPasses.hue!.uniforms.colorNum, 'value', [2.0, 4.0, 8.0, 16.0]).name("Color Number");
+    palFolder.hide();
+
     // Shader selection dropdown
     gui.add(settings, 'activeShader', {
         'None': 'none',
@@ -217,6 +252,8 @@ function setupGUI() {
         'Cathode Ray Tube': 'cRayTube',
         'CRT with addition': 'crtAd',
         'Ascii Shader': 'ascii',
+        'Hue Lightness': 'hue',
+        'Color Palettes': 'pal',
     }).name('Post Effect').onChange((value: string) => {
         // Only disable non-bloom passes
         shaderPasses.bayerDither!.enabled = false;
@@ -225,7 +262,9 @@ function setupGUI() {
         shaderPasses.cRayTube!.enabled = false;
         shaderPasses.crtAd!.enabled = false;
         shaderPasses.ascii!.enabled = false;
-        
+        shaderPasses.hue!.enabled = false;
+        shaderPasses.pal!.enabled = false;
+
         if (value !== 'none' && shaderPasses[value as keyof typeof shaderPasses]) {
             shaderPasses[value as keyof typeof shaderPasses]!.enabled = true;
         }
@@ -235,6 +274,8 @@ function setupGUI() {
         colorQuaFolder.hide();
         crtFolder.hide();
         crtAdFolder.hide();
+        hueFolder.hide();
+        palFolder.hide();
 
         if (value === 'bayerDither') {
             bayerFolder.show();
@@ -246,7 +287,12 @@ function setupGUI() {
             crtFolder.show();
         } else if (value === 'crtAd') {
             crtAdFolder.show();
-        } 
+        } else if (value === 'hue') {
+            hueFolder.show();
+        } else if (value === 'hue') {
+            palFolder.show();
+        }
+        
     });
 }
 
@@ -278,6 +324,12 @@ function onWindowResize() {
     }
     if (shaderPasses.ascii) {
         shaderPasses.ascii.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+    }
+    if (shaderPasses.hue) {
+        shaderPasses.hue.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+    }
+    if (shaderPasses.pal) {
+        shaderPasses.pal.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
     }
 }
 
