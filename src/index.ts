@@ -13,6 +13,7 @@ import { BlueNoiseDither } from './BlueNoiseDither';
 import { ColorQuantization } from './ColorQuantization';
 import { CathodeRayTube } from './CathodeRayTube';
 import { UnrealBloomPass} from 'three/examples/jsm/Addons.js';
+import { RGBShiftShader } from 'three/examples/jsm/Addons.js';
 import { CRTad } from './CRTad';
 import { AsciiShader } from './AsciiShader';
 import { HueLightness } from './HueLightness';
@@ -30,6 +31,7 @@ let composer: EffectComposer;
 
 const shaderPasses = {
     bloomPass: null as UnrealBloomPass | null,
+    chromatic: null as ShaderPass | null,
     bayerDither: null as ShaderPass | null,
     blueNoise: null as ShaderPass | null,
     colorQua: null as ShaderPass | null,
@@ -43,6 +45,7 @@ const shaderPasses = {
 const settings = {
     activeShader: 'none',
     enableBloom: false,
+    enableChrome: false,
 }
 
 
@@ -99,7 +102,11 @@ function init() {
         0.5,    // radius
         0.9,    // threshold
     );
+
+    shaderPasses.chromatic = new ShaderPass(RGBShiftShader);
+
     shaderPasses.bloomPass.enabled = false;
+    shaderPasses.chromatic.enabled = false;
 
     // Ordered Dither
     shaderPasses.bayerDither = new ShaderPass(DitherShader);
@@ -153,8 +160,6 @@ function init() {
     shaderPasses.ascii.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
     shaderPasses.ascii.enabled = false;
 
-    
-
     shaderPasses.hue = new ShaderPass(HueLightness);
     shaderPasses.hue.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
     shaderPasses.hue.uniforms['colorNum'].value = 16.0;
@@ -169,6 +174,7 @@ function init() {
 
     // Add the pass to the effect composer
     composer.addPass(shaderPasses.bloomPass);
+    composer.addPass(shaderPasses.chromatic);
     composer.addPass(shaderPasses.bayerDither);
     composer.addPass(shaderPasses.blueNoise);
     composer.addPass(shaderPasses.colorQua);
@@ -202,12 +208,34 @@ function setupGUI() {
         if (shaderPasses.bloomPass) {
             shaderPasses.bloomPass.enabled = value;
         }
+        if (value) {
+            bloomFolder.show();
+        } else {
+            bloomFolder.hide();
+        }
     });
+
+    gui.add(settings, 'enableChrome').name("Enable RGB").onChange((value: boolean) => {
+        if (shaderPasses.chromatic) {
+            shaderPasses.chromatic.enabled = value;
+        }
+
+        if (value) {
+            chromeFolder.show();
+        } else {
+            chromeFolder.hide();
+        }
+    })
 
     const bloomFolder = gui.addFolder('Unreal Bloom');
     bloomFolder.add(shaderPasses.bloomPass!, 'strength', 0.0, 3.0, 0.01).name('Strength');
     bloomFolder.add(shaderPasses.bloomPass!, 'radius', 0.0, 1.0, 0.01).name('Radius');
     bloomFolder.add(shaderPasses.bloomPass!, 'threshold', 0.0, 1.0, 0.01).name('Threshold');
+
+    const chromeFolder = gui.addFolder("Chromatic Aberration");
+    chromeFolder.add(shaderPasses.chromatic!.uniforms.amount, 'value', 0.0, 0.01, 0.0001).name('Amount');
+    chromeFolder.add(shaderPasses.chromatic!.uniforms.angle, 'value', 0.0, 180, 1).name('Angle');
+    chromeFolder.hide(); 
 
     const bayerFolder = gui.addFolder('Bayer Dither');
     bayerFolder.add(shaderPasses.bayerDither!.uniforms.bias, 'value', 0.0, 1.0, 0.01).name('Bias');
