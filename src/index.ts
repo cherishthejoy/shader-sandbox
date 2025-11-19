@@ -18,6 +18,7 @@ import { CRTad } from './CRTad';
 import { AsciiShader } from './AsciiShader';
 import { HueLightness } from './HueLightness';
 import { ColorPalette } from './ColorPalette';
+import { LegoShader } from './LegoShader';
 
 const clock = new THREE.Clock();
 
@@ -40,6 +41,7 @@ const shaderPasses = {
     ascii: null as ShaderPass | null,
     hue: null as ShaderPass | null,
     pal: null as ShaderPass | null,
+    lego: null as ShaderPass | null,
 };
 
 const settings = {
@@ -171,6 +173,12 @@ function init() {
     shaderPasses.pal.uniforms['palette'].value = paletteTexture;
     shaderPasses.pal.enabled = false;
 
+    shaderPasses.lego = new ShaderPass(LegoShader);
+    shaderPasses.lego.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    shaderPasses.lego.uniforms['pixelSize'].value = 4.0;
+    shaderPasses.lego.uniforms['lightPosition'].value = new THREE.Vector2(0.8, 0.8);
+    shaderPasses.lego.enabled = false;
+
 
     // Add the pass to the effect composer
     composer.addPass(shaderPasses.bloomPass);
@@ -183,6 +191,7 @@ function init() {
     composer.addPass(shaderPasses.ascii);
     composer.addPass(shaderPasses.hue);
     composer.addPass(shaderPasses.pal);
+    composer.addPass(shaderPasses.lego);
     
 
     const outputPass = new OutputPass();
@@ -271,6 +280,10 @@ function setupGUI() {
     palFolder.add(shaderPasses.hue!.uniforms.colorNum, 'value', [2.0, 4.0, 8.0, 16.0]).name("Color Number");
     palFolder.hide();
 
+    const legoFolder = gui.addFolder("Lego Shader");
+    legoFolder.add(shaderPasses.lego!.uniforms.pixelSize, 'value', [4.0, 8.0, 16.0, 32.0]).name("Pixel Size");
+    legoFolder.hide();
+
     // Shader selection dropdown
     gui.add(settings, 'activeShader', {
         'None': 'none',
@@ -282,6 +295,7 @@ function setupGUI() {
         'Ascii Shader': 'ascii',
         'Hue Lightness': 'hue',
         'Color Palettes': 'pal',
+        'Lego Shader': 'lego',
     }).name('Post Effect').onChange((value: string) => {
         // Only disable non-bloom passes
         shaderPasses.bayerDither!.enabled = false;
@@ -292,6 +306,7 @@ function setupGUI() {
         shaderPasses.ascii!.enabled = false;
         shaderPasses.hue!.enabled = false;
         shaderPasses.pal!.enabled = false;
+        shaderPasses.lego!.enabled = false;
 
         if (value !== 'none' && shaderPasses[value as keyof typeof shaderPasses]) {
             shaderPasses[value as keyof typeof shaderPasses]!.enabled = true;
@@ -304,6 +319,7 @@ function setupGUI() {
         crtAdFolder.hide();
         hueFolder.hide();
         palFolder.hide();
+        legoFolder.hide();
 
         if (value === 'bayerDither') {
             bayerFolder.show();
@@ -317,8 +333,10 @@ function setupGUI() {
             crtAdFolder.show();
         } else if (value === 'hue') {
             hueFolder.show();
-        } else if (value === 'hue') {
+        } else if (value === 'pal') {
             palFolder.show();
+        } else if (value === 'lego') {
+            legoFolder.show();
         }
         
     });
@@ -358,6 +376,9 @@ function onWindowResize() {
     }
     if (shaderPasses.pal) {
         shaderPasses.pal.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+    }
+    if (shaderPasses.lego) {
+        shaderPasses.lego.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
     }
 }
 
