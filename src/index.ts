@@ -12,7 +12,7 @@ import { DitherShader } from './DitherShader'
 import { BlueNoiseDither } from './BlueNoiseDither';
 import { ColorQuantization } from './ColorQuantization';
 import { CathodeRayTube } from './CathodeRayTube';
-import { UnrealBloomPass} from 'three/examples/jsm/Addons.js';
+import { GLTFLoader, UnrealBloomPass} from 'three/examples/jsm/Addons.js';
 import { RGBShiftShader } from 'three/examples/jsm/Addons.js';
 import { CRTad } from './CRTad';
 import { AsciiShader } from './AsciiShader';
@@ -23,12 +23,14 @@ import { LegoShader } from './LegoShader';
 const clock = new THREE.Clock();
 
 
-let camera: THREE.OrthographicCamera;
+let camera: THREE.PerspectiveCamera;
 let scene: THREE.Scene;
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls;
 let light: THREE.DirectionalLight;
 let composer: EffectComposer;
+
+const gltfLoader = new GLTFLoader();
 
 const shaderPasses = {
     bloomPass: null as UnrealBloomPass | null,
@@ -58,23 +60,16 @@ function init() {
 
     let screenResolution = new THREE.Vector2(window.innerWidth, window.innerHeight)
 
-    const aspect = window.innerWidth / window.innerHeight;
-    const frustumSize = 10;
-    camera = new THREE.OrthographicCamera(
-        frustumSize * aspect / -2,  // left
-        frustumSize * aspect / 2,   // right
-        frustumSize / 2,            // top
-        frustumSize / -2,           // bottom
-        0.01,                        // near
-        500  )
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 
     camera.position.set(5, 5, 5);
-    camera.zoom = 3;
+    camera.zoom = 1;
     camera.updateProjectionMatrix();
 
     scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0x151729);
-    scene.background = new THREE.Color("#3386E0");
+    // scene.background = new THREE.Color(0x151729);scene.background = new THREE.Color("#3386E0");
+    // 
+    scene.background = new THREE.Color( 0x0a0a0a );
 
     // Renderer
     renderer = new THREE.WebGLRenderer({antialias: false});
@@ -100,9 +95,9 @@ function init() {
     // Bloom pass
     shaderPasses.bloomPass = new UnrealBloomPass(
         screenResolution, 
-        1.0,    // strength
-        0.5,    // radius
-        0.9,    // threshold
+        0.35,    // strength
+        0.18,    // radius
+        0.0,    // threshold
     );
 
     shaderPasses.chromatic = new ShaderPass(RGBShiftShader);
@@ -175,7 +170,7 @@ function init() {
 
     shaderPasses.lego = new ShaderPass(LegoShader);
     shaderPasses.lego.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
-    shaderPasses.lego.uniforms['pixelSize'].value = 4.0;
+    shaderPasses.lego.uniforms['pixelSize'].value = 16.0;
     shaderPasses.lego.uniforms['lightPosition'].value = new THREE.Vector2(0.8, 0.8);
     shaderPasses.lego.enabled = false;
 
@@ -197,17 +192,71 @@ function init() {
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
 
-    { // Object
-        let mesh = new THREE.Mesh(
-            new THREE.TorusKnotGeometry(1, 0.25, 128, 100),
-            new THREE.MeshStandardMaterial({color:'#58A4FE'}),
-        )
-        scene.add(mesh)
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particlesCount = 200;
+    const positions = new Float32Array( particlesCount * 3 );
+
+    for ( let i = 0; i < particlesCount * 3; i += 3 ) {
+
+        const radius = 50 + Math.random() * 10;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+
+        positions[ i ] = radius * Math.sin( phi ) * Math.cos( theta );
+        positions[ i + 1 ] = radius * Math.cos( phi );
+        positions[ i + 2 ] = radius * Math.sin( phi ) * Math.sin( theta );
+
     }
-            
+
+    particlesGeometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+
+    const particlesMaterial = new THREE.PointsMaterial( {
+        color: 0xffffff,
+        size: 0.5,
+        sizeAttenuation: true
+    } );
+
+    const particles = new THREE.Points( particlesGeometry, particlesMaterial );
+    scene.add( particles );
+
+
+    const gridHelper = new THREE.GridHelper( 40, 20, 0x444444, 0x222222 );
+    gridHelper.position.y = 0;
+    scene.add( gridHelper );
+
+    const cube_geometry = new THREE.BoxGeometry(3, 3, 3);
+    const cube_material = new THREE.MeshBasicMaterial({color: 'aliceblue'});
+
+    const cube = new THREE.Mesh(cube_geometry, cube_material);
+
+    scene.add(cube);
+        
+
+    
+    loadGLTFModel('models/miku.gltf', new THREE.Vector3(-1, 3.2, 0.3));
+    
     setupGUI();
 
     window.addEventListener('resize', onWindowResize, false);
+}
+
+function loadGLTFModel(url: string, position: THREE.Vector3) {
+    gltfLoader.load(url, (gltf) => {
+        const root = gltf.scene;
+        scene.add(root);
+
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        // const center = box.getCenter(new THREE.Vector3());
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 10.0 / maxDim;
+        root.scale.multiplyScalar(scale);
+
+        const newBox = new THREE.Box3().setFromObject(root);
+        const newCenter = newBox.getCenter(new THREE.Vector3());
+        root.position.sub(newCenter).add(position);
+    });
 }
 
 function setupGUI() {
@@ -281,7 +330,7 @@ function setupGUI() {
     palFolder.hide();
 
     const legoFolder = gui.addFolder("Lego Shader");
-    legoFolder.add(shaderPasses.lego!.uniforms.pixelSize, 'value', [4.0, 8.0, 16.0, 32.0]).name("Pixel Size");
+    legoFolder.add(shaderPasses.lego!.uniforms.pixelSize, 'value', [8.0, 16.0, 32.0, 64.0]).name("Pixel Size");
     legoFolder.hide();
 
     // Shader selection dropdown
@@ -343,14 +392,6 @@ function setupGUI() {
 }
 
 function onWindowResize() {
-
-    const aspect = window.innerWidth / window.innerHeight;
-    const frustumSize = 10;
-    
-    camera.left = frustumSize * aspect / -2;
-    camera.right = frustumSize * aspect / 2;
-    camera.top = frustumSize / 2;
-    camera.bottom = frustumSize / -2;
     camera.updateProjectionMatrix();
     
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -390,6 +431,7 @@ function animate() {
     if (shaderPasses.crtAd) {
         shaderPasses.crtAd.uniforms.time.value = elapsedTime;
     }
+    
     controls.update();
     composer.render();
 }
