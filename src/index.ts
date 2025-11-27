@@ -29,8 +29,10 @@ let renderer: THREE.WebGLRenderer
 let controls: OrbitControls;
 let light: THREE.DirectionalLight;
 let composer: EffectComposer;
+let disc: THREE.Mesh;
 
 const gltfLoader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
 
 const shaderPasses = {
     bloomPass: null as UnrealBloomPass | null,
@@ -67,8 +69,6 @@ function init() {
     camera.updateProjectionMatrix();
 
     scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0x151729);scene.background = new THREE.Color("#3386E0");
-    // 
     scene.background = new THREE.Color( 0x0a0a0a );
 
     // Renderer
@@ -112,16 +112,18 @@ function init() {
     shaderPasses.bayerDither.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
     shaderPasses.bayerDither.enabled = false;
 
-    const textureLoader = new THREE.TextureLoader();
+    
     const blueNoiseTexture = textureLoader.load('textures/128x128.png');
     blueNoiseTexture.wrapS  = THREE.RepeatWrapping;
     blueNoiseTexture.wrapT  = THREE.RepeatWrapping;
 
-    const paletteTexture = textureLoader.load('textures/fading-16-8x.png');
+    const paletteTexture = textureLoader.load('textures/midnight-ablaze-8x.png');
     paletteTexture.minFilter = THREE.NearestFilter;
     paletteTexture.magFilter = THREE.NearestFilter;
     paletteTexture.wrapS = THREE.ClampToEdgeWrapping;
     paletteTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+    // Album art
 
     // Blue Noise
     shaderPasses.blueNoise = new ShaderPass(BlueNoiseDither);
@@ -224,30 +226,36 @@ function init() {
     gridHelper.position.y = 0;
     scene.add( gridHelper );
 
-    const cube_geometry = new THREE.BoxGeometry(3, 3, 3);
-    const cube_material = new THREE.MeshBasicMaterial({color: 'aliceblue'});
+    const discTexture = textureLoader.load('textures/sp.jpg'); // Add your image path here
+    discTexture.colorSpace = THREE.SRGBColorSpace;
 
-    const cube = new THREE.Mesh(cube_geometry, cube_material);
+    const discGeometry = new THREE.CircleGeometry(2.5, 32);
+    const discMaterial = new THREE.MeshStandardMaterial({
+        map: discTexture,
+        side: THREE.DoubleSide
+    });
 
-    scene.add(cube);
-        
+    disc = new THREE.Mesh(discGeometry, discMaterial);
+    disc.rotation.x = -Math.PI / 2;  // rotate to be horizontal
+    disc.position.set(0.7, 0.8, 0.004);   // slightly above ground to avoid z-fighting
+    scene.add(disc);
 
-    
-    loadGLTFModel('models/miku.gltf', new THREE.Vector3(-1, 3.2, 0.3));
+    loadGLTFModel('models/miku.gltf', new THREE.Vector3(-7.7, 3.2, 1), new THREE.Euler(0, -Math.PI / 2, 0));
+    loadGLTFModel('models/cd-player.gltf', new THREE.Vector3(-1, 3, 0));
     
     setupGUI();
 
     window.addEventListener('resize', onWindowResize, false);
 }
 
-function loadGLTFModel(url: string, position: THREE.Vector3) {
+function loadGLTFModel(url: string, position: THREE.Vector3, rotation: THREE.Euler = new THREE.Euler(0, 0, 0)) {
     gltfLoader.load(url, (gltf) => {
         const root = gltf.scene;
+
         scene.add(root);
 
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
-        // const center = box.getCenter(new THREE.Vector3());
 
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = 10.0 / maxDim;
@@ -256,6 +264,8 @@ function loadGLTFModel(url: string, position: THREE.Vector3) {
         const newBox = new THREE.Box3().setFromObject(root);
         const newCenter = newBox.getCenter(new THREE.Vector3());
         root.position.sub(newCenter).add(position);
+
+        root.rotation.copy(rotation);
     });
 }
 
@@ -326,7 +336,7 @@ function setupGUI() {
     hueFolder.hide();
 
     const palFolder = gui.addFolder('Palette');
-    palFolder.add(shaderPasses.hue!.uniforms.colorNum, 'value', [2.0, 4.0, 8.0, 16.0]).name("Color Number");
+    palFolder.add(shaderPasses.pal!.uniforms.colorNum, 'value', [2.0, 4.0, 8.0, 16.0]).name("Color Number");
     palFolder.hide();
 
     const legoFolder = gui.addFolder("Lego Shader");
@@ -397,6 +407,7 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
 
+
     if (shaderPasses.bayerDither) {
         shaderPasses.bayerDither.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
     } 
@@ -431,7 +442,14 @@ function animate() {
     if (shaderPasses.crtAd) {
         shaderPasses.crtAd.uniforms.time.value = elapsedTime;
     }
+
+    
+
+    disc.rotation.z += 0.01;
+
     
     controls.update();
     composer.render();
 }
+
+
