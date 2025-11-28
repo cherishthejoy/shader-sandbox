@@ -21,6 +21,7 @@ import { ColorPalette } from './ColorPalette';
 import { LegoShader } from './LegoShader';
 import { Pixelize } from './Pixelize';
 
+
 const clock = new THREE.Clock();
 
 
@@ -89,7 +90,7 @@ function init() {
     light.position.set(0, 10, 5);
     scene.add(light);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
     // Controller
     controls = new OrbitControls(camera, renderer.domElement);
@@ -233,7 +234,6 @@ function init() {
     const particles = new THREE.Points( particlesGeometry, particlesMaterial );
     scene.add( particles );
 
-
     const gridHelper = new THREE.GridHelper( 40, 20, 0x444444, 0x222222 );
     gridHelper.position.y = 0;
     scene.add( gridHelper );
@@ -250,6 +250,8 @@ function init() {
     disc = new THREE.Mesh(discGeometry, discMaterial);
     disc.rotation.x = -Math.PI / 2;  // rotate to be horizontal
     disc.position.set(0.7, 0.8, 0.004);   // slightly above ground to avoid z-fighting
+    disc.castShadow = true;
+    disc.receiveShadow = true;
     scene.add(disc);
 
     loadGLTFModel('models/miku.gltf', new THREE.Vector3(-7.7, 3.2, 1), new THREE.Euler(0, -Math.PI / 2, 0));
@@ -265,6 +267,7 @@ function loadGLTFModel(url: string, position: THREE.Vector3, rotation: THREE.Eul
         const root = gltf.scene;
 
         scene.add(root);
+
 
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
@@ -528,9 +531,11 @@ function animate() {
 
     disc.rotation.z += 0.01;
     controls.update();
+
     composer.render();
 
     
 }
+
 
 
