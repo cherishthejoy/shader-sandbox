@@ -19,6 +19,7 @@ import { AsciiShader } from './AsciiShader';
 import { HueLightness } from './HueLightness';
 import { ColorPalette } from './ColorPalette';
 import { LegoShader } from './LegoShader';
+import { Pixelize } from './Pixelize';
 
 const clock = new THREE.Clock();
 
@@ -37,6 +38,7 @@ const textureLoader = new THREE.TextureLoader();
 const shaderPasses = {
     bloomPass: null as UnrealBloomPass | null,
     chromatic: null as ShaderPass | null,
+    pix: null as ShaderPass | null,
     bayerDither: null as ShaderPass | null,
     blueNoise: null as ShaderPass | null,
     colorQua: null as ShaderPass | null,
@@ -50,8 +52,9 @@ const shaderPasses = {
 
 const settings = {
     activeShader: 'none',
-    enableBloom: false,
+    enableBloom: true,
     enableChrome: false,
+    enablePixelize: true,
 }
 
 
@@ -64,8 +67,12 @@ function init() {
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 
-    camera.position.set(5, 5, 5);
-    camera.zoom = 1;
+    // camera.position.set(5, 5, 5);
+    // camera.zoom = 1;
+
+    camera.position.set(-10.94, 5.64, 1.56);
+    camera.zoom = 1.00;
+    // controls.target.set(0.00, 0.00, 0.00);
     camera.updateProjectionMatrix();
 
     scene = new THREE.Scene();
@@ -95,24 +102,18 @@ function init() {
     // Bloom pass
     shaderPasses.bloomPass = new UnrealBloomPass(
         screenResolution, 
-        0.35,    // strength
+        0.23,    // strength
         0.18,    // radius
         0.0,    // threshold
     );
 
     shaderPasses.chromatic = new ShaderPass(RGBShiftShader);
+    shaderPasses.pix = new ShaderPass(Pixelize);
 
-    shaderPasses.bloomPass.enabled = false;
+    shaderPasses.bloomPass.enabled = true;
     shaderPasses.chromatic.enabled = false;
+    shaderPasses.pix.enabled = true;
 
-    // Ordered Dither
-    shaderPasses.bayerDither = new ShaderPass(DitherShader);
-    shaderPasses.bayerDither.uniforms['matrixSize'].value = 8.0;
-    shaderPasses.bayerDither.uniforms['bias'].value = 0.0;
-    shaderPasses.bayerDither.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
-    shaderPasses.bayerDither.enabled = false;
-
-    
     const blueNoiseTexture = textureLoader.load('textures/128x128.png');
     blueNoiseTexture.wrapS  = THREE.RepeatWrapping;
     blueNoiseTexture.wrapT  = THREE.RepeatWrapping;
@@ -123,7 +124,12 @@ function init() {
     paletteTexture.wrapS = THREE.ClampToEdgeWrapping;
     paletteTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    // Album art
+    // Ordered Dither
+    shaderPasses.bayerDither = new ShaderPass(DitherShader);
+    shaderPasses.bayerDither.uniforms['matrixSize'].value = 8.0;
+    shaderPasses.bayerDither.uniforms['bias'].value = 0.0;
+    shaderPasses.bayerDither.uniforms['resolution'].value = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    shaderPasses.bayerDither.enabled = false;
 
     // Blue Noise
     shaderPasses.blueNoise = new ShaderPass(BlueNoiseDither);
@@ -176,6 +182,11 @@ function init() {
     shaderPasses.lego.uniforms['lightPosition'].value = new THREE.Vector2(0.8, 0.8);
     shaderPasses.lego.enabled = false;
 
+    shaderPasses.pix = new ShaderPass(Pixelize);
+    shaderPasses.pix.uniforms['resolution'].value = new THREE.Vector4(window.innerWidth, window.innerHeight, 1 / window.innerWidth, 1 / window.innerHeight);
+    shaderPasses.pix.uniforms['pixelSize'].value = 4.0;
+    shaderPasses.pix.enabled = true;
+
 
     // Add the pass to the effect composer
     composer.addPass(shaderPasses.bloomPass);
@@ -189,6 +200,7 @@ function init() {
     composer.addPass(shaderPasses.hue);
     composer.addPass(shaderPasses.pal);
     composer.addPass(shaderPasses.lego);
+    composer.addPass(shaderPasses.pix);
     
 
     const outputPass = new OutputPass();
@@ -272,6 +284,49 @@ function loadGLTFModel(url: string, position: THREE.Vector3, rotation: THREE.Eul
 function setupGUI() {
     const gui = new GUI();
 
+    const cameraInfo = {
+        posX: 0,
+        posY: 0,
+        posZ: 0,
+        targetX: 0,
+        targetY: 0,
+        targetZ: 0,
+        zoom: 1,
+    };
+
+    const infoFolder = gui.addFolder('Camera Info (Read-Only)');
+    infoFolder.add(cameraInfo, 'posX').name('Camera X').listen().disable();
+    infoFolder.add(cameraInfo, 'posY').name('Camera Y').listen().disable();
+    infoFolder.add(cameraInfo, 'posZ').name('Camera Z').listen().disable();
+    infoFolder.add(cameraInfo, 'targetX').name('Target X').listen().disable();
+    infoFolder.add(cameraInfo, 'targetY').name('Target Y').listen().disable();
+    infoFolder.add(cameraInfo, 'targetZ').name('Target Z').listen().disable();
+    infoFolder.add(cameraInfo, 'zoom').name('Zoom').listen().disable();
+
+    infoFolder.add({
+        copyValues: () => {
+            const values = `camera.position.set(${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)});
+                            camera.zoom = ${camera.zoom.toFixed(2)};
+                            controls.target.set(${controls.target.x.toFixed(2)}, ${controls.target.y.toFixed(2)}, ${controls.target.z.toFixed(2)});`;
+            navigator.clipboard.writeText(values);
+            console.log('Copied to clipboard:\n' + values);
+        }
+    }, 'copyValues').name('Copy Values');
+
+    infoFolder.open();
+
+    function updateCameraInfo() {
+        cameraInfo.posX = parseFloat(camera.position.x.toFixed(2));
+        cameraInfo.posY = parseFloat(camera.position.y.toFixed(2));
+        cameraInfo.posZ = parseFloat(camera.position.z.toFixed(2));
+        cameraInfo.targetX = parseFloat(controls.target.x.toFixed(2));
+        cameraInfo.targetY = parseFloat(controls.target.y.toFixed(2));
+        cameraInfo.targetZ = parseFloat(controls.target.z.toFixed(2));
+        cameraInfo.zoom = parseFloat(camera.zoom.toFixed(2));
+    }
+
+    (window as any).updateCameraInfo = updateCameraInfo;
+
     gui.add(settings, 'enableBloom').name('Enable Bloom').onChange((value: boolean) => {
         if (shaderPasses.bloomPass) {
             shaderPasses.bloomPass.enabled = value;
@@ -295,15 +350,32 @@ function setupGUI() {
         }
     })
 
+    gui.add(settings, 'enablePixelize').name("Enable Pixelization").onChange((value: boolean) => {
+        if (shaderPasses.pix) {
+            shaderPasses.pix.enabled = value;
+        }
+
+        if (value) {
+            pixFolder.show();
+        } else {
+            pixFolder.hide();
+        }
+    })
+
     const bloomFolder = gui.addFolder('Unreal Bloom');
     bloomFolder.add(shaderPasses.bloomPass!, 'strength', 0.0, 3.0, 0.01).name('Strength');
     bloomFolder.add(shaderPasses.bloomPass!, 'radius', 0.0, 1.0, 0.01).name('Radius');
     bloomFolder.add(shaderPasses.bloomPass!, 'threshold', 0.0, 1.0, 0.01).name('Threshold');
+    bloomFolder.hide();
 
     const chromeFolder = gui.addFolder("Chromatic Aberration");
     chromeFolder.add(shaderPasses.chromatic!.uniforms.amount, 'value', 0.0, 0.01, 0.0001).name('Amount');
     chromeFolder.add(shaderPasses.chromatic!.uniforms.angle, 'value', 0.0, 180, 1).name('Angle');
     chromeFolder.hide(); 
+
+    const pixFolder = gui.addFolder("Pixelize");
+    pixFolder.add(shaderPasses.pix!.uniforms.pixelSize, 'value', [2.0, 4.0, 8.0, 16.0]).name("Pixel Size");
+    pixFolder.hide();
 
     const bayerFolder = gui.addFolder('Bayer Dither');
     bayerFolder.add(shaderPasses.bayerDither!.uniforms.bias, 'value', 0.0, 1.0, 0.01).name('Bias');
@@ -342,6 +414,8 @@ function setupGUI() {
     const legoFolder = gui.addFolder("Lego Shader");
     legoFolder.add(shaderPasses.lego!.uniforms.pixelSize, 'value', [8.0, 16.0, 32.0, 64.0]).name("Pixel Size");
     legoFolder.hide();
+
+    
 
     // Shader selection dropdown
     gui.add(settings, 'activeShader', {
@@ -432,10 +506,15 @@ function onWindowResize() {
     if (shaderPasses.lego) {
         shaderPasses.lego.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
     }
+    // if (shaderPasses.pix) {
+    //     shaderPasses.pix.uniforms.resolution.value.set(window.innerWidth, window.innerHeight, 1 / window.innerWidth, 1 / window.innerHeight);
+    // }
 }
 
 function animate() {
     requestAnimationFrame(animate);
+
+    
 
     const elapsedTime = clock.getElapsedTime();
 
@@ -443,13 +522,15 @@ function animate() {
         shaderPasses.crtAd.uniforms.time.value = elapsedTime;
     }
 
-    
+    if ((window as any).updateCameraInfo) {
+        (window as any).updateCameraInfo();
+    }
 
     disc.rotation.z += 0.01;
-
-    
     controls.update();
     composer.render();
+
+    
 }
 
 

@@ -7,7 +7,7 @@ const ColorQuantization = {
         'pixelSize': {value: 1.0},
     },
 
-    vertexShader: `
+    vertexShader: /* glsl */ `
         varying vec2 vUv;
 
         void main() {
@@ -16,7 +16,7 @@ const ColorQuantization = {
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
     
-    fragmentShader: `
+    fragmentShader: /* glsl */`
         uniform sampler2D tDiffuse;
         uniform vec4 resolution;
         uniform float colorNum;
